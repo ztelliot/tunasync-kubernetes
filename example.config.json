@@ -1,0 +1,9 @@
+{
+  "port": 14242,
+  "name": "tunasync-manager",
+  "namespace": "mirrors",
+  "image": "ztelliot/tunasync_manager:latest",
+  "sc": "StorageClass",
+  "node": "",
+  "mirrors": {}
+}

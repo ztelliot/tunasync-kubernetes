@@ -1,0 +1,115 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {name}-log-pvc
+  annotations:
+    volume.beta.kubernetes.io/storage-class: {sc}
+  namespace: {namespace}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {sc}
+  resources:
+    requests:
+      storage: {log_size}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {name}-data-pvc
+  annotations:
+    volume.beta.kubernetes.io/storage-class: {sc}
+  namespace: {namespace}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {sc}
+  resources:
+    requests:
+      storage: {data_size}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {name}-conf
+  namespace: {namespace}
+data:
+  worker.conf: |
+{conf}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {name}
+  namespace: {namespace}
+  labels:
+    app: {name}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app: {name}
+  template:
+    metadata:
+      labels:
+        app: {name}
+    spec:
+      containers:
+        - name: {name}
+          image: {image}
+          imagePullPolicy: Always
+          livenessProbe:
+            tcpSocket:
+              port: 6000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 30
+            successThreshold: 1
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: 6000
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          volumeMounts:
+            - mountPath: /var/log/tunasync
+              name: {name}-log-pvc
+            - mountPath: /data/mirrors
+              name: {name}-data-pvc
+            - mountPath: /app/worker.conf
+              name: {name}-conf
+              subPath: worker.conf
+          ports:
+            - name: api
+              containerPort: 6000
+              protocol: TCP
+      {node}
+      volumes:
+        - name: {name}-log-pvc
+          persistentVolumeClaim:
+            claimName: {name}-log-pvc
+        - name: {name}-data-pvc
+          persistentVolumeClaim:
+            claimName: {name}-data-pvc
+        - name: {name}-conf
+          configMap:
+            name: {name}-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: {name}
+  name: {name}
+  namespace: {namespace}
+spec:
+  ports:
+  - port: 6000
+    protocol: TCP
+    targetPort: 6000
+  selector:
+    app: {name}
