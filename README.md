@@ -6,16 +6,17 @@
    本项目是前作 [tunasync-manage-script](https://github.com/ztelliot/tunasync-manage-script) 的延申
 
 ## 如何使用 / HowTo
-
-   ### 开始
+   ### 准备
    首先确保K8s可用，并部署了`metrics-server`
    
-   并且由于脚本需要进入容器统计镜像大小，因此必须在主节点使用
-   
+   由于脚本需要进入容器统计镜像大小，因此必须在主节点使用
+
    安装Python3、pip
    
    `yum install -y python3 python3-pip`
+
    或
+
    `apt install -y python3 python3-pip`
    
    克隆本项目
@@ -26,6 +27,7 @@
    
    `pip3 install -r requirements.txt`
 
+   ### 开始
    修改`config.json`
 
    `mv example.config.json config.json && vi config.json`
@@ -73,6 +75,8 @@
    
    ### 关于Worker镜像的定制
    可以参照`worker/worker.dockerfile`进行相关设置
+   
+   例如，你需要使用`tuna/tunasync-scripts`内的相关脚本，你可以简单的将基础容器修改为`tunathu/tunasync-scripts`以达到配置环境的效果
 
    ### 关于tunasync
-   预设的镜像仅支持x86_64，有额外需求请自行编译
+   预设的镜像仅支持x86_64，有额外需求请自行构建镜像
