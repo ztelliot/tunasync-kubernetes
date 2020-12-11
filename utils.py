@@ -17,7 +17,6 @@ def get_config():
 
 config = get_config()
 
-
 def check():
     try:
         if get('http://{}:{}/jobs'.format(config['clusterIP'], config['port'])):
@@ -227,13 +226,14 @@ class mirror_control(object):
         worker = self.name
         mirror = self.name
         actions = ['start', 'stop', 'disable', 'restart']
+        worker_actions = ['reload', 'rm-worker']
         if action == 'flush':
             command = "tunasynctl flush"
         elif action == 'set-size':
             command = "tunasynctl set-size -w " + worker + " " + mirror + " " + size
         elif action in actions:
             command = "tunasynctl " + action + " -w " + worker + " " + mirror
-        elif action == 'reload':
+        elif action in worker_actions:
             command = "tunasynctl reload -w " + worker
         else:
             return 0
@@ -321,9 +321,9 @@ class mirror_control(object):
 
     def delete(self):
         print(Kubernetes.delete('conf/{}.yaml'.format(self.name)))
-        print(self.ctl_control('reload'))
         print(self.ctl_control('disable'))
         print(self.ctl_control('flush'))
+        print(self.ctl_control('rm-worker'))
         self.conf['mirrors'].pop(self.name)
         with open('config.json', 'w') as df:
             df.write(json.dumps(self.conf))
@@ -358,6 +358,17 @@ class status(object):
         self.workers = Kubernetes.info(self.conf['namespace'])
         self.jobs = get("http://{}:{}/jobs".format(self.conf['clusterIP'], self.conf['port'])).json()
 
+    def match_name(self, pod_name, job_name):
+        pod_name = pod_name.split('-')[:-2]
+        job_name = job_name.split('-')
+        if len(pod_name) == len(job_name):
+            for i in range(len(pod_name)):
+                if pod_name[i] != job_name[i]:
+                    return 0
+            return 1
+        else:
+            return 0
+
     def match(self, name):
         base = {'job': {}, 'pod': {}, 'top': {}}
         try:
@@ -367,12 +378,15 @@ class status(object):
         for job in self.jobs:
             if job['name'] == name:
                 base['job'] = job
+                break
         for pod in self.workers['pods']:
-            if name in pod['name']:
+            if self.match_name(pod['name'], name):
                 base['pod'] = pod
+                break
         for top in self.workers['tops']:
-            if name in top['name']:
+            if self.match_name(top['name'], name):
                 base['top'] = top
+                break
         return base
 
     def process(self, name):
