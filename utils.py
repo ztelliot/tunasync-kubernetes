@@ -177,7 +177,11 @@ class Kubernetes(object):
     @staticmethod
     def exec(name, ns, cmd):
         command = "kubectl exec deploy/{name} -n {ns} -- {cmd}".format(name=name, ns=ns, cmd=cmd)
-        res = delegator.run(command).out
+        try:
+            res = delegator.chain(command, 60).out
+        except:
+            print("Time OUT!")
+            return -1
         return res
 
     @staticmethod
@@ -290,7 +294,7 @@ class mirror_control(object):
         worker = ''
         with open('conf/{}.conf'.format(self.name)) as f:
             with open('worker/worker.conf') as wf:
-                lines = wf.read().format(concurrent=con, interval=interval, mirrors=f.read(), name=self.name, ip=self.conf['clusterIP'], port=self.conf['port']).split('\n')
+                lines = wf.read().format(concurrent=con, interval=interval, mirrors=f.read(), name=self.name, manager=self.conf['name'], port=self.conf['port']).split('\n')
                 for line in lines:
                     worker += '    {}\n'.format(line)
         if self.conf['node']:
@@ -317,6 +321,8 @@ class mirror_control(object):
             pass
         else:
             size = size_format(int(Kubernetes.exec(name=self.name, ns=self.ns, cmd="du -s /data/mirrors | awk '{print $1}'")))
+            if size == '-1K':
+                return self.job()['size']
         return size
 
     def delete(self):
