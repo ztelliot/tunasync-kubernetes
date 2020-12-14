@@ -178,10 +178,10 @@ class Kubernetes(object):
     def exec(name, ns, cmd):
         command = "kubectl exec deploy/{name} -n {ns} -- {cmd}".format(name=name, ns=ns, cmd=cmd)
         try:
-            res = delegator.chain(command, 60).out
+            res = delegator.run(command, timeout=60).out
         except:
-            print("Time OUT!")
-            return -1
+            print("TIME OUT !")
+            res = -1
         return res
 
     @staticmethod
@@ -234,7 +234,7 @@ class mirror_control(object):
         if action == 'flush':
             command = "tunasynctl flush"
         elif action == 'set-size':
-            command = "tunasynctl set-size -w " + worker + " " + mirror + " " + size
+            command = "tunasynctl set-size -w {} {} {}".format(worker, mirror, size)
         elif action in actions:
             command = "tunasynctl " + action + " -w " + worker + " " + mirror
         elif action in worker_actions:
@@ -315,8 +315,11 @@ class mirror_control(object):
 
     def size(self):
         size = ''
-        if self.conf['mirrors'][self.name]['type'] == 'rsync' and self.job()['status'] == 'success':
-            size = Kubernetes.exec(name=self.name, ns=self.ns, cmd="tac /var/log/tunasync/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
+        if self.conf['mirrors'][self.name]['type'] == 'rsync':
+            if self.job()['status'] == 'success':
+                size = Kubernetes.exec(name=self.name, ns=self.ns, cmd="tac /var/log/tunasync/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
+            # elif self.job()['status'] == 'syncing':
+            #     size = status().process(self.name)['job']['size']
         if size:
             pass
         else:
@@ -428,7 +431,7 @@ class status(object):
                                 remain = part
                             elif '=' in part or '#' in part:
                                 pass
-                            elif part:
+                            elif part and pass_time == '-':
                                 size = part
                     elif log:
                         files = log.split('/')
