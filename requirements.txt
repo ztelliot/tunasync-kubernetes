@@ -1,4 +1,3 @@
-requests
 wget
 delegator.py
 configobj

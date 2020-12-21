@@ -58,7 +58,7 @@ spec:
       containers:
         - name: {name}
           image: {image}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             tcpSocket:
               port: 6000
@@ -78,9 +78,9 @@ spec:
           volumeMounts:
             - mountPath: /var/log/tunasync
               name: {name}-log-pvc
-            - mountPath: /data/mirrors
+            - mountPath: /data/mirrors/{name}
               name: {name}-data-pvc
-            - mountPath: /app/worker.conf
+            - mountPath: /etc/tunasync/worker.conf
               name: {name}-conf
               subPath: worker.conf
           ports:

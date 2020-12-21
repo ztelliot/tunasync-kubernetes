@@ -23,7 +23,5 @@ def menu():
 
 
 if __name__ == "__main__":
-    if check() < 0:
-        pass
-    else:
+    if check():
         menu()

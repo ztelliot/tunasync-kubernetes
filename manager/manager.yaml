@@ -34,7 +34,7 @@ spec:
       containers:
         - name: {name}
           image: {image}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             tcpSocket:
               port: 14242

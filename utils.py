@@ -1,10 +1,8 @@
-from tools.build import build
 import delegator
 import json
 import re
 import time
 from configobj import ConfigObj
-from requests import get
 from prettytable import PrettyTable
 
 
@@ -17,32 +15,17 @@ def get_config():
 
 config = get_config()
 
+
+def ctl(cmd):
+    res = Kubernetes.exec(config['name'], config['namespace'], "tunasynctl " + cmd)
+    return res
+
+
 def check():
-    try:
-        if get('http://{}:{}/jobs'.format(config['clusterIP'], config['port'])):
-            try:
-                ctl = delegator.run('tunasynctl list --all').out
-                if json.loads(ctl):
-                    return 1
-            except:
-                set_ctl()
-                return 0
-        else:
-            init()
-    except:
-        init()
-
-
-def set_ctl():
-    if 'Version' in delegator.run("tunasynctl -v").out:
-        pass
+    if ctl("-v") != -1:
+        return 1
     else:
-        build().getBin()
-        delegator.run("mv tunasynctl /usr/bin")
-    delegator.run('mkdir /etc/tunasync')
-    with open('manager/ctl.conf') as f:
-        with open('/etc/tunasync/ctl.conf', 'w') as wf:
-            wf.write(f.read().format(ip=config['clusterIP'], port=config['port']))
+        return 0
 
 
 def init():
@@ -51,10 +34,7 @@ def init():
             wf.write(f.read().format(name=config['name'], namespace=config['namespace'], image=config['image'], sc=config['sc'], port=config['port']))
     res = Kubernetes.apply("conf/manager.yaml")
     if res > 0:
-        config['clusterIP'] = json.loads(delegator.run("kubectl -n mirrors get service -o json").out)['items'][0]['spec']['clusterIP']
-        with open('config.json', 'w') as cf:
-            cf.write(json.dumps(config))
-    set_ctl()
+        pass
 
 
 def size_format(size_k):
@@ -74,14 +54,14 @@ def size_format(size_k):
 
 def manager_stat():
     infos = status()
-    table = PrettyTable(['Pod状态', 'clusterIP', 'cpu', 'mem'])
+    table = PrettyTable(['Pod状态', 'cpu', 'mem'])
     table.align = 'l'
     info = infos.process(config['name'])
     if not info['pod']:
         info['pod']['status'] = '-'
     if not info['top']:
         info['top']['cpu'] = info['top']['mem'] = '-'
-    table.add_row([info['pod']['status'], config['clusterIP'], info['top']['cpu'], info['top']['mem']])
+    table.add_row([info['pod']['status'], info['top']['cpu'], info['top']['mem']])
     print(table)
 
 
@@ -177,11 +157,7 @@ class Kubernetes(object):
     @staticmethod
     def exec(name, ns, cmd):
         command = "kubectl exec deploy/{name} -n {ns} -- {cmd}".format(name=name, ns=ns, cmd=cmd)
-        try:
-            res = delegator.run(command, timeout=60).out
-        except:
-            print("TIME OUT !")
-            res = -1
+        res = delegator.run(command).out
         return res
 
     @staticmethod
@@ -203,10 +179,6 @@ class Kubernetes(object):
                     infos = pod.split()
                     info = {"name": infos[0], "ready": infos[1], "status": infos[2], "restarts": infos[3]}
                     status['pods'].append(info)
-            # services = delegator.run("kubectl get services -n {ns} | grep {name}".format(ns=ns, name=name)).out.split()
-            # if services:
-            #     status['service'] = {"name": services[0], "type": services[1], "cluster-ip": services[2],
-            #                          "external-ip": services[3], "port": services[4]}
             tops = delegator.run("kubectl top pods -n {ns}".format(ns=ns)).out.split('\n')
             for top in tops:
                 if top:
@@ -232,16 +204,15 @@ class mirror_control(object):
         actions = ['start', 'stop', 'disable', 'restart']
         worker_actions = ['reload', 'rm-worker']
         if action == 'flush':
-            command = "tunasynctl flush"
+            return ctl("flush")
         elif action == 'set-size':
-            command = "tunasynctl set-size -w {} {} {}".format(worker, mirror, size)
+            return ctl("set-size -w {} {} {}".format(worker, mirror, size))
         elif action in actions:
-            command = "tunasynctl " + action + " -w " + worker + " " + mirror
+            return ctl(action + " -w " + worker + " " + mirror)
         elif action in worker_actions:
-            command = "tunasynctl reload -w " + worker
+            return ctl("reload -w " + worker)
         else:
             return 0
-        return delegator.run(command).out
 
     def add(self):
         mirror_conf = ConfigObj(list_values=False)
@@ -308,7 +279,7 @@ class mirror_control(object):
         return 0
 
     def job(self):
-        jobs = get("http://{}:{}/jobs".format(self.conf['clusterIP'], self.conf['port'])).json()
+        jobs = json.loads(ctl("list --all"))
         for job in jobs:
             if job['name'] == self.name:
                 return job
@@ -323,7 +294,7 @@ class mirror_control(object):
         if size:
             pass
         else:
-            size = size_format(int(Kubernetes.exec(name=self.name, ns=self.ns, cmd="du -s /data/mirrors | awk '{print $1}'")))
+            size = size_format(int(Kubernetes.exec(name=self.name, ns=self.ns, cmd="df /data/mirrors/" + self.name + " | grep " + self.name + " | awk '{print $3}'")))
             if size == '-1K':
                 return self.job()['size']
         return size
@@ -365,7 +336,6 @@ class status(object):
     def __init__(self):
         self.conf = get_config()
         self.workers = Kubernetes.info(self.conf['namespace'])
-        self.jobs = get("http://{}:{}/jobs".format(self.conf['clusterIP'], self.conf['port'])).json()
 
     def match_name(self, pod_name, job_name):
         pod_name = pod_name.split('-')[:-2]
@@ -384,7 +354,7 @@ class status(object):
             base['type'] = self.conf['mirrors'][name]['type']
         except:
             base['type'] = ''
-        for job in self.jobs:
+        for job in json.loads(ctl("list --all").strip('\n')):
             if job['name'] == name:
                 base['job'] = job
                 break

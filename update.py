@@ -1,9 +1,8 @@
 import json
-import delegator
-from utils import mirror_control
+from utils import mirror_control, ctl
 
 
-jobs = json.loads(delegator.run("tunasynctl list --all").out.strip('\n'))
+jobs = json.loads(ctl("list --all").strip('\n'))
 for job in jobs:
     mirror = job['name']
     print(mirror)

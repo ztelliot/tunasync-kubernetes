@@ -1,15 +1,13 @@
 FROM debian:latest
 
-WORKDIR /app
+COPY tunasync tunasynctl /usr/bin/
 
-COPY tunasync /usr/bin
+RUN chmod +x /usr/bin/tunasync /usr/bin/tunasynctl && mkdir /etc/tunasync/
 
-RUN chmod +x /usr/bin/tunasync
-
-COPY manager.conf .
+COPY ctl.conf manager.conf /etc/tunasync/
 
 VOLUME ["/var/lib/tunasync"]
 
 EXPOSE 14242
 
-ENTRYPOINT ["/bin/bash", "-c", "(tunasync manager --config /app/manager.conf)"]
+ENTRYPOINT ["/bin/bash", "-c", "(tunasync manager --config /etc/tunasync/manager.conf)"]
