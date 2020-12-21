@@ -336,6 +336,7 @@ class status(object):
     def __init__(self):
         self.conf = get_config()
         self.workers = Kubernetes.info(self.conf['namespace'])
+        self.jobs = json.loads(ctl("list --all").strip('\n'))
 
     def match_name(self, pod_name, job_name):
         pod_name = pod_name.split('-')[:-2]
@@ -354,7 +355,7 @@ class status(object):
             base['type'] = self.conf['mirrors'][name]['type']
         except:
             base['type'] = ''
-        for job in json.loads(ctl("list --all").strip('\n')):
+        for job in self.jobs:
             if job['name'] == name:
                 base['job'] = job
                 break
