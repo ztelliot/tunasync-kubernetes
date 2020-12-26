@@ -9,8 +9,7 @@ from prettytable import PrettyTable
 def get_config():
     with open('config.json', 'r') as rf:
         mir = rf.read()
-    config = eval(mir)
-    return config
+    return json.loads(mir)
 
 
 config = get_config()
@@ -31,25 +30,53 @@ def check():
 def init():
     with open('manager/manager.yaml') as f:
         with open('conf/manager.yaml', 'w') as wf:
-            wf.write(f.read().format(name=config['name'], namespace=config['namespace'], image=config['image'], sc=config['sc'], port=config['port']))
+            wf.write(f.read().format(name=config['name'], namespace=config['namespace'], image=config['image'],
+                                     sc=config['sc'], port=config['port']))
     res = Kubernetes.apply("conf/manager.yaml")
     if res > 0:
         pass
 
 
-def size_format(size_k):
-    size_m = size_k / 1024
-    size_g = size_m / 1024
-    size_t = size_g / 1024
-    if size_t > 1:
-        human_readable_size = str(round(size_t, 2)) + 'T'
-    elif size_g > 1:
-        human_readable_size = str(round(size_g, 2)) + 'G'
-    elif size_m > 1:
-        human_readable_size = str(round(size_m, 2)) + 'M'
+def color(msg):
+    if 'ing' in msg:
+        msg = "\033[33mO\033[0m"
+    elif 'fail' in msg:
+        msg = "\033[31mO\033[0m"
+    elif 'success' in msg:
+        msg = "\033[32mO\033[0m"
     else:
-        human_readable_size = str(round(size_k, 2)) + 'K'
-    return human_readable_size
+        pass
+    return msg
+
+
+class size_tools(object):
+    @staticmethod
+    def format(size_k):
+        size_m = size_k / 1024
+        size_g = size_m / 1024
+        size_t = size_g / 1024
+        if size_t > 1:
+            human_readable_size = str(round(size_t, 2)) + 'T'
+        elif size_g > 1:
+            human_readable_size = str(round(size_g, 2)) + 'G'
+        elif size_m > 1:
+            human_readable_size = str(round(size_m, 2)) + 'M'
+        else:
+            human_readable_size = str(round(size_k, 2)) + 'K'
+        return human_readable_size
+
+    @staticmethod
+    def XB_XiB(size_b: str):
+        if 'T' in size_b.upper():
+            size_b = str(
+                round((float(size_b.split('T')[0]) * 1000 * 1000 * 1000 * 1000 / (1024 * 1024 * 1024 * 1024)), 2)) + 'T'
+        elif 'G' in size_b.upper():
+            size_b = str(round((float(size_b.split('G')[0]) * 1000 * 1000 * 1000 / (1024 * 1024 * 1024)), 2)) + 'G'
+        elif 'K' in size_b.upper():
+            size_b = str(round((float(size_b.split('K')[0]) * 1000 * 1000 / (1024 * 1024)), 2)) + 'K'
+        else:
+            pass
+        return size_b
 
 
 def manager_stat():
@@ -70,7 +97,7 @@ def control():
         config = get_config()
         infos = status()
         table = PrettyTable(
-            ['序号', '名称', '状态', 'Pod状态', '大小', '上次同步(用时)', '下次同步', '进度', '速度', '剩余时间', '剩余/总数', '当前文件(序号)', 'cpu', 'mem'])
+            ['', '名称', '状态', 'Pod状态', '大小(本次)', '上次同步(用时)', '下次同步', '进度', '速度', '剩余时间', '文件进度', '当前文件(序号)', 'cpu', 'mem'])
         table.align = 'l'
         for i, name in enumerate(config['mirrors']):
             info = infos.process(name)
@@ -86,17 +113,31 @@ def control():
                     next_time = '-'
                 if info['job']['status'] == 'syncing' and config['mirrors'][name]['type'] == 'rsync':
                     try:
-                        table.add_row([i + 1, name, info['job']['status'], info['pod']['status'], info['job']['size'], '{}({})'.format(last_time, info['job']['pass_time']), next_time, info['job']['rate'], info['job']['speed'], info['job']['remain'], '{}/{}'.format(info['job']['chk_remain'], info['job']['total']), '{}({})'.format(info['job']['file_name'], info['job']['chk_now']), info['top']['cpu'], info['top']['mem']])
-                        mirror_control(name).ctl_control('set-size', info['job']['size'])
+                        if info['job']['chk_remain'] and info['job']['total']:
+                            chk_rate = str(round(100 * (1 - info['job']['chk_remain'] / info['job']['total']), 2)) + '%'
+                        else:
+                            chk_rate = 'null'
+                        table.add_row([i + 1, name, color(info['job']['status']), info['pod']['status'],
+                                       '{}({})'.format(info['job']['size'], info['job']['now_size']),
+                                       '{}({})'.format(last_time, info['job']['pass_time']), next_time,
+                                       info['job']['rate'], info['job']['speed'], info['job']['remain'], chk_rate,
+                                       '{}({})'.format(info['job']['file_name'], info['job']['chk_now']),
+                                       info['top']['cpu'], info['top']['mem']])
                     except:
-                        table.add_row([i + 1, name, info['job']['status'], info['pod']['status'], info['job']['size'], '{}({})'.format(last_time, info['job']['pass_time']), next_time, '获', '取', '失', '败', '...', info['top']['cpu'], info['top']['mem']])
+                        table.add_row(
+                            [i + 1, name, color(info['job']['status']), info['pod']['status'], info['job']['size'],
+                             '{}({})'.format(last_time, info['job']['pass_time']), next_time, '获', '取', '失', '败', '...',
+                             info['top']['cpu'], info['top']['mem']])
                 else:
-                    table.add_row([i + 1, name, info['job']['status'], info['pod']['status'], info['job']['size'], '{}({})'.format(last_time, info['job']['pass_time']), next_time, '-', '-', '-', '-', '-', info['top']['cpu'], info['top']['mem']])
+                    table.add_row(
+                        [i + 1, name, color(info['job']['status']), info['pod']['status'], info['job']['size'],
+                         '{}({})'.format(last_time, info['job']['pass_time']), next_time, '-', '-', '-', '-', '-',
+                         info['top']['cpu'], info['top']['mem']])
             except:
                 try:
                     table.add_row(
-                        [i + 1, name, 'disabled', info['pod']['status'], '', '', '', '', '', '', '', '', info['top']['cpu'],
-                         info['top']['mem']])
+                        [i + 1, name, color('disabled'), info['pod']['status'], '', '', '', '', '', '', '', '',
+                         info['top']['cpu'], info['top']['mem']])
                 except:
                     pass
         del infos
@@ -210,7 +251,7 @@ class mirror_control(object):
         elif action in actions:
             return ctl(action + " -w " + worker + " " + mirror)
         elif action in worker_actions:
-            return ctl("reload -w " + worker)
+            return ctl(action + " -w " + worker)
         else:
             return 0
 
@@ -265,7 +306,8 @@ class mirror_control(object):
         worker = ''
         with open('conf/{}.conf'.format(self.name)) as f:
             with open('worker/worker.conf') as wf:
-                lines = wf.read().format(concurrent=con, interval=interval, mirrors=f.read(), name=self.name, manager=self.conf['name'], port=self.conf['port']).split('\n')
+                lines = wf.read().format(concurrent=con, interval=interval, mirrors=f.read(), name=self.name,
+                                         manager=self.conf['name'], port=self.conf['port']).split('\n')
                 for line in lines:
                     worker += '    {}\n'.format(line)
         if self.conf['node']:
@@ -274,7 +316,9 @@ class mirror_control(object):
             node = ""
         with open('worker/worker.yaml') as f:
             with open('conf/{}.yaml'.format(self.name), 'w') as wf:
-                wf.write(f.read().format(name=self.name, namespace=self.ns, sc=self.conf['sc'], conf=worker, image=image, data_size=data_size, log_size=log_size, node=node))
+                wf.write(
+                    f.read().format(name=self.name, namespace=self.ns, sc=self.conf['sc'], conf=worker, image=image,
+                                    data_size=data_size, log_size=log_size, node=node))
         Kubernetes.apply('conf/{}.yaml'.format(self.name))
         return 0
 
@@ -288,13 +332,13 @@ class mirror_control(object):
         size = ''
         if self.conf['mirrors'][self.name]['type'] == 'rsync':
             if self.job()['status'] == 'success':
-                size = Kubernetes.exec(name=self.name, ns=self.ns, cmd="tac /var/log/tunasync/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
-            # elif self.job()['status'] == 'syncing':
-            #     size = status().process(self.name)['job']['size']
+                size = Kubernetes.exec(name=self.name, ns=self.ns,
+                                       cmd="tac /var/log/tunasync/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
         if size:
             pass
         else:
-            size = size_format(int(Kubernetes.exec(name=self.name, ns=self.ns, cmd="df /data/mirrors/" + self.name + " | grep " + self.name + " | awk '{print $3}'")))
+            size = size_tools.format(int(Kubernetes.exec(name=self.name, ns=self.ns,
+                                                   cmd="df /data/mirrors/" + self.name + " | grep " + self.name + " | awk '{print $3}'")))
             if size == '-1K':
                 return self.job()['size']
         return size
@@ -382,7 +426,7 @@ class status(object):
                 pass_time = '-'
             size = job['size']
             status = job['status']
-            file_name = remain = speed = rate = total = chk_now = chk_remain = '-'
+            rsync_size = file_name = remain = speed = rate = total = chk_now = chk_remain = '-'
             if status == 'syncing' and info['type'] == 'rsync':
                 logs = mirror_control(name).logs(5).split("\n")
                 for log in logs:
@@ -403,14 +447,24 @@ class status(object):
                             elif '=' in part or '#' in part:
                                 pass
                             elif part and pass_time == '-':
-                                size = part
+                                rsync_size = size_tools.XB_XiB(part)
                     elif log:
                         files = log.split('/')
                         file_name = files[-1]
                 try:
-                    job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time, 'chk_now': chk_now, 'chk_remain': chk_remain, 'total': total, 'rate': rate, 'speed': speed, 'remain': remain, 'file_name': file_name, 'next_time': next_time}
+                    chk_remain = int(chk_remain)
+                    total = int(total)
                 except:
-                    job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time, 'next_time': next_time}
+                    chk_remain = total = 0
+                try:
+                    job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time,
+                                'chk_now': chk_now, 'chk_remain': chk_remain, 'total': total, 'rate': rate,
+                                'speed': speed, 'remain': remain, 'file_name': file_name, 'next_time': next_time,
+                                'now_size': rsync_size}
+                except:
+                    job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time,
+                                'next_time': next_time}
             else:
-                job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time, 'next_time': next_time}
+                job_info = {'status': status, 'size': size, 'last_time': last_time, 'pass_time': pass_time,
+                            'next_time': next_time}
         return {"job": job_info, "pod": info['pod'], "top": info['top']}

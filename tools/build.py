@@ -10,9 +10,6 @@ path = os.getcwd()
 
 
 class build(object):
-    def __init__(self):
-        with open("config.json") as f:
-            self.config = eval(f.read())
 
     def getPlat(self):
         plat = platform.machine()
@@ -82,6 +79,8 @@ class build(object):
         return 0
 
     def Worker(self, image, concurrent, interval, mirrors, name):
+        with open("config.json") as f:
+            config = eval(f.read())
         self.getBin()
         with open('../worker/worker.dockerfile') as f:
             with open('../conf/Dockerfile', 'w') as wf:
@@ -89,7 +88,7 @@ class build(object):
         with open('../worker/worker.conf') as f:
             with open('conf/worker.conf', 'w') as wf:
                 wf.write(f.read().format(concurrent=concurrent, interval=interval, name=name, mirrors=mirrors,
-                                         ip=self.config['clusterIP'], port=self.config['port']))
+                                         ip=config['clusterIP'], port=config['port']))
         print(delegator.run('docker build conf -t worker:{} && rm -f conf/Dockerfile'.format(name)).out)
         return 0
 
@@ -100,5 +99,7 @@ if __name__ == "__main__":
         build().Manager()
     elif 'worker' in options:
         print("Please USE main.py to build worker image")
+    elif 'dl' in options:
+        build().getBin()
     else:
         print("Error")

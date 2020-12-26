@@ -3,7 +3,7 @@
   "name": "tunasync-manager",
   "namespace": "mirrors",
   "image": "ztelliot/tunasync_manager:latest",
-  "sc": "StorageClass",
+  "sc": "mirrors",
   "node": "",
   "mirrors": {}
 }
