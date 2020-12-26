@@ -21,10 +21,10 @@ def ctl(cmd):
 
 
 def check():
-    if ctl("-v") != -1:
+    if ctl("-v"):
         return 1
     else:
-        return 0
+        init()
 
 
 def init():
@@ -116,7 +116,7 @@ def control():
                         if info['job']['chk_remain'] and info['job']['total']:
                             chk_rate = str(round(100 * (1 - info['job']['chk_remain'] / info['job']['total']), 2)) + '%'
                         else:
-                            chk_rate = 'null'
+                            chk_rate = '-'
                         table.add_row([i + 1, name, color(info['job']['status']), info['pod']['status'],
                                        '{}({})'.format(info['job']['size'], info['job']['now_size']),
                                        '{}({})'.format(last_time, info['job']['pass_time']), next_time,
@@ -265,7 +265,6 @@ class mirror_control(object):
         memory_limit = input("内存限制(不填不限制)：") or ''
         image = input("使用的容器镜像(ztelliot/tunasync_worker:rsync)：") or 'ztelliot/tunasync_worker:rsync'
         data_size = input("镜像最大占用大小(1Ti)：") or '1Ti'
-        log_size = '1Gi'
         command = ''
         if provider == "command":
             command = '\"' + input("同步脚本位置(绝对路径)：") + '\"'
@@ -318,7 +317,7 @@ class mirror_control(object):
             with open('conf/{}.yaml'.format(self.name), 'w') as wf:
                 wf.write(
                     f.read().format(name=self.name, namespace=self.ns, sc=self.conf['sc'], conf=worker, image=image,
-                                    data_size=data_size, log_size=log_size, node=node))
+                                    data_size=data_size, node=node))
         Kubernetes.apply('conf/{}.yaml'.format(self.name))
         return 0
 
@@ -333,7 +332,7 @@ class mirror_control(object):
         if self.conf['mirrors'][self.name]['type'] == 'rsync':
             if self.job()['status'] == 'success':
                 size = Kubernetes.exec(name=self.name, ns=self.ns,
-                                       cmd="tac /var/log/tunasync/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
+                                       cmd="tac /var/log/tunasync/" + self.name + "/latest | grep \"^Total file size: \" | head -n 1 | grep -Po \"[0-9\\.]+[MGT]\"")
         if size:
             pass
         else:
@@ -373,7 +372,7 @@ class mirror_control(object):
         return Kubernetes.logs(self.name, self.ns)
 
     def logs(self, num=10):
-        return Kubernetes.exec(self.name, self.ns, "tail -n {}  /var/log/tunasync/latest".format(num))
+        return Kubernetes.exec(self.name, self.ns, "tail -n {}  /var/log/tunasync/{}/latest".format(num, self.name))
 
 
 class status(object):

@@ -1,21 +1,6 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: {name}-log-pvc
-  annotations:
-    volume.beta.kubernetes.io/storage-class: {sc}
-  namespace: {namespace}
-spec:
-  accessModes:
-    - ReadWriteMany
-  storageClassName: {sc}
-  resources:
-    requests:
-      storage: {log_size}
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
   name: {name}-data-pvc
   annotations:
     volume.beta.kubernetes.io/storage-class: {sc}
@@ -77,7 +62,7 @@ spec:
             failureThreshold: 5
           volumeMounts:
             - mountPath: /var/log/tunasync
-              name: {name}-log-pvc
+              name: data-pvc
             - mountPath: /data/mirrors/{name}
               name: {name}-data-pvc
             - mountPath: /etc/tunasync/worker.conf
@@ -89,9 +74,9 @@ spec:
               protocol: TCP
       {node}
       volumes:
-        - name: {name}-log-pvc
+        - name: data-pvc
           persistentVolumeClaim:
-            claimName: {name}-log-pvc
+            claimName: data-pvc
         - name: {name}-data-pvc
           persistentVolumeClaim:
             claimName: {name}-data-pvc
